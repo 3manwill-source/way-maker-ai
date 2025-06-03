@@ -1,16 +1,5 @@
-# Multi-stage Dockerfile for WayMaker AI
-FROM node:18-alpine AS web-builder
-
-# Build frontend
-WORKDIR /app/web
-COPY web/package.json web/pnpm-lock.yaml ./
-RUN npm install -g pnpm && pnpm install --frozen-lockfile
-
-COPY web/ ./
-RUN pnpm build
-
-# Python API stage
-FROM python:3.11-slim AS api-base
+# Simplified Dockerfile for WayMaker AI (Dify-based)
+FROM python:3.11-slim
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -18,90 +7,72 @@ RUN apt-get update && apt-get install -y \
     curl \
     git \
     nginx \
-    supervisor \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
 
-# Copy and install Python dependencies
-COPY api/pyproject.toml api/uv.lock ./
-RUN pip install uv && uv pip install --system --no-cache-dir -r uv.lock
+# Install Python dependencies
+COPY api/pyproject.toml ./
+RUN pip install --no-cache-dir \
+    flask \
+    gunicorn \
+    psycopg2-binary \
+    redis \
+    requests \
+    pydantic \
+    sqlalchemy \
+    flask-sqlalchemy \
+    flask-migrate \
+    celery \
+    python-dotenv
 
 # Copy API code
-COPY api/ ./api/
+COPY api/ ./
 
-# Copy built frontend
-COPY --from=web-builder /app/web/.next ./web/.next
-COPY --from=web-builder /app/web/public ./web/public
-COPY --from=web-builder /app/web/package.json ./web/
+# Create simple nginx config
+RUN echo 'server { \
+    listen 80; \
+    server_name _; \
+    location / { \
+        proxy_pass http://localhost:5000; \
+        proxy_set_header Host $host; \
+        proxy_set_header X-Real-IP $remote_addr; \
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; \
+        proxy_set_header X-Forwarded-Proto $scheme; \
+    } \
+}' > /etc/nginx/sites-available/default
 
-# Copy nginx configuration
-COPY nginx/ ./nginx/
-
-# Configure nginx
-RUN rm /etc/nginx/sites-enabled/default
-COPY nginx/nginx.conf /etc/nginx/nginx.conf
-
-# Configure supervisor
-COPY <<EOF /etc/supervisor/conf.d/waymaker.conf
-[supervisord]
-nodaemon=true
-user=root
-
-[program:api]
-command=python -m gunicorn --bind 0.0.0.0:8000 --workers 2 api.app:app
-directory=/app
-autostart=true
-autorestart=true
-stderr_logfile=/var/log/api.err.log
-stdout_logfile=/var/log/api.out.log
-
-[program:web]
-command=node server.js
-directory=/app/web
-autostart=true
-autorestart=true
-stderr_logfile=/var/log/web.err.log
-stdout_logfile=/var/log/web.out.log
-
-[program:nginx]
-command=/usr/sbin/nginx -g "daemon off;"
-autostart=true
-autorestart=true
-stderr_logfile=/var/log/nginx.err.log
-stdout_logfile=/var/log/nginx.out.log
-EOF
+# Environment variables
+ENV FLASK_APP=app.py
+ENV FLASK_ENV=production
+ENV WEB_API_CORS_ALLOW_ORIGINS=*
+ENV CONSOLE_CORS_ALLOW_ORIGINS=*
+ENV WEB_API_URL=http://localhost:5000
+ENV CONSOLE_API_URL=http://localhost:5000
 
 # Create startup script
-COPY <<EOF /app/start.sh
-#!/bin/bash
-set -e
-
-# Initialize database if needed
-cd /app/api
-python -c "
-import os
-from app_factory import create_app
-app = create_app()
-with app.app_context():
-    from extensions.ext_database import db
-    db.create_all()
-    print('Database initialized')
-"
-
-# Start supervisor
-exec /usr/bin/supervisord -c /etc/supervisor/conf.d/waymaker.conf
-EOF
-
-RUN chmod +x /app/start.sh
+RUN echo '#!/bin/bash\n\
+set -e\n\
+echo "Starting WayMaker AI..."\n\
+\n\
+# Start nginx in background\n\
+nginx -g "daemon off;" &\n\
+\n\
+# Wait a moment for nginx to start\n\
+sleep 2\n\
+\n\
+# Start Flask app\n\
+echo "Starting Flask API on port 5000..."\n\
+exec python app.py\n\
+' > /app/start.sh && chmod +x /app/start.sh
 
 # Expose port
 EXPOSE 80
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
   CMD curl -f http://localhost/ || exit 1
 
-# Start services
+# Start application
 CMD ["/app/start.sh"]
