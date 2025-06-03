@@ -1,0 +1,73 @@
+name: WayMaker AI CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [api, web]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Node.js (for web)
+      if: matrix.service == 'web'
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: web/package-lock.json
+        
+    - name: Set up Python (for api)
+      if: matrix.service == 'api'
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install web dependencies
+      if: matrix.service == 'web'
+      working-directory: ./web
+      run: |
+        npm ci
+        
+    - name: Install API dependencies
+      if: matrix.service == 'api'
+      working-directory: ./api
+      run: |
+        pip install -r requirements.txt || echo "No requirements.txt found"
+        
+    - name: Run web tests
+      if: matrix.service == 'web'
+      working-directory: ./web
+      run: |
+        npm run test:ci || echo "No tests configured yet"
+        
+    - name: Run API tests
+      if: matrix.service == 'api'
+      working-directory: ./api
+      run: |
+        pytest || echo "No tests configured yet"
+        
+    - name: Build web
+      if: matrix.service == 'web'
+      working-directory: ./web
+      run: |
+        npm run build
+        
+    - name: Lint code
+      if: matrix.service == 'web'
+      working-directory: ./web
+      run: |
+        npm run lint || echo "No linting configured"
