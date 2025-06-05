@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WayMaker AI – Community Chat</title>
+  <style>
+    /* ───── basic layout ───── */
+    body        {margin:0;font-family:Segoe UI, sans-serif;display:flex;height:100vh;background:#f8f9fa}
+    #sidebar    {width:240px;background:#fff;border-right:1px solid #ddd;display:flex;flex-direction:column;box-shadow:2px 0 4px rgba(0,0,0,0.1)}
+    #chat-pane  {flex:1;display:flex;flex-direction:column}
+    #messages   {flex:1;padding:1rem;overflow-y:auto;background:#fff}
+    #input-bar  {display:flex;border-top:1px solid #ddd;background:#fff}
+    input, textarea, button {font:inherit}
+
+    /* ───── WayMaker AI branding ───── */
+    .header {background:#003049;color:#fff;padding:1rem;text-align:center;font-weight:bold}
+    .tagline {font-size:0.8rem;opacity:0.9;margin-top:0.25rem}
+
+    /* ───── message bubble ───── */
+    .message            {margin-bottom:1rem}
+    .message-header     {font-size:.8rem;color:#555;display:flex;justify-content:space-between;margin-bottom:.25rem}
+    .message-bubble     {background:#e5ecf2;padding:.75rem;border-radius:.75rem;white-space:pre-wrap;line-height:1.4}
+    .assistant .message-bubble {background:#fff7e0;border-left:4px solid #c78a44}
+    .user .message-bubble {background:#f0f8ff;border-left:4px solid #003049}
+    .message-actions    {margin-top:.25rem}
+    .msg-action-btn     {background:none;border:none;cursor:pointer;font-size:1rem;margin-right:.25rem;padding:0.25rem;border-radius:4px}
+    .msg-action-btn:hover {background:#f0f0f0}
+
+    /* ───── sidebar lists ───── */
+    .sidebar-header   {padding:1rem;font-weight:bold;border-bottom:1px solid #ddd;background:#f8f9fa}
+    .conversation-item,
+    .user-item        {padding:.5rem 1rem;cursor:pointer;border-bottom:1px solid #eee}
+    .conversation-item:hover,
+    .user-item:hover  {background:#e0e7ff}
+
+    /* ───── input styling ───── */
+    #user-input {flex:1;padding:.75rem;border:none;outline:none}
+    #send-btn {padding:.75rem 1rem;border:none;background:#003049;color:#fff;cursor:pointer;font-weight:bold}
+    #send-btn:hover {background:#004a6b}
+  </style>
+</head>
+
+<body>
+  <!-- ───── left sidebar ───── -->
+  <aside id="sidebar">
+    <div class="header">
+      WayMaker AI
+      <div class="tagline">Your path to living God's will</div>
+    </div>
+    <div class="sidebar-header">Conversations</div>
+    <ul id="conversation-list" style="flex:1;list-style:none;padding-left:0;margin:0;overflow-y:auto"></ul>
+    <div class="sidebar-header">Community</div>
+    <ul id="user-list" style="flex:0 0 140px;list-style:none;padding-left:0;margin:0;overflow-y:auto"></ul>
+  </aside>
+
+  <!-- ───── main chat pane ───── -->
+  <section id="chat-pane">
+    <div id="messages"></div>
+    <div id="input-bar">
+      <input id="user-input" type="text" placeholder="Ask WayMaker AI for biblical guidance..." style="flex:1;padding:.75rem;border:none">
+      <button id="send-btn" style="padding:.75rem 1rem;border:none;background:#003049;color:#fff">Send</button>
+    </div>
+  </section>
+
+  <!-- ───── script ───── -->
+  <script>
+    /* ------------ quick state ------------ */
+    const messagesEl = document.getElementById('messages');
+    const inputEl    = document.getElementById('user-input');
+    const sendBtn    = document.getElementById('send-btn');
+    let   msgSeq     = 0;          // simple id counter
+
+    /* ------------ DOM helpers ------------ */
+    function addActionBtn(parent, label, onclick) {
+      const btn = document.createElement('button');
+      btn.className = 'msg-action-btn';
+      btn.textContent = label;
+      btn.onclick = onclick;
+      parent.appendChild(btn);
+    }
+
+    function buildMessage(messageId, type, content, sender) {
+      const wrap = document.createElement('div');
+      wrap.className = 'message ' + type;
+      wrap.id = messageId;
+
+      // header
+      const header = document.createElement('div');
+      header.className = 'message-header';
+
+      const strong = document.createElement('strong');
+      strong.textContent = sender;
+      const time = document.createElement('span');
+      time.textContent = new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+      header.append(strong, time);
+
+      // bubble
+      const bubble = document.createElement('div');
+      bubble.className = 'message-bubble';
+      bubble.textContent = content;
+
+      // actions
+      const actions = document.createElement('div');
+      actions.className = 'message-actions';
+      if (type === 'assistant') {
+        addActionBtn(actions,'🙏',()=>console.log('pray',messageId));
+        addActionBtn(actions,'📖',()=>console.log('scripture',messageId));
+        addActionBtn(actions,'❤️',()=>console.log('like',messageId));
+        addActionBtn(actions,'🔊',()=>speakText(content));
+      } else {
+        addActionBtn(actions,'✏️',()=>console.log('edit',messageId));
+        addActionBtn(actions,'🗑️',()=>wrap.remove());
+      }
+      addActionBtn(actions,'📋',()=>navigator.clipboard.writeText(content));
+
+      wrap.append(header,bubble,actions);
+      return wrap;
+    }
+
+    function speakText(text) {
+      if (!('speechSynthesis' in window)) return;
+      const ut = new SpeechSynthesisUtterance(text);
+      ut.rate = .9;
+      speechSynthesis.speak(ut);
+    }
+
+    /* ------------ demo send ------------ */
+    function addLocalMessage(content, role='user', sender='Friend') {
+      const id = 'msg_'+(++msgSeq);
+      const node = buildMessage(id, role==='assistant'?'assistant':'user', content, sender);
+      messagesEl.appendChild(node);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      return id;
+    }
+
+    // send button behaviour
+    sendBtn.onclick = () => {
+      const txt = inputEl.value.trim();
+      if (!txt) return;
+      addLocalMessage(txt,'user','You');
+      inputEl.value='';
+      
+      // Biblical responses based on question type
+      setTimeout(()=>{
+        let response = '';
+        const question = txt.toLowerCase();
+        
+        if (question.includes('prayer') || question.includes('pray')) {
+          response = 'Peace be with you! 🙏 Prayer is our conversation with God. Jesus taught us to pray in Matthew 6:9-13, saying "Our Father in heaven, hallowed be your name..." Remember, God hears every prayer and knows your heart before you speak.';
+        } else if (question.includes('doubt') || question.includes('faith')) {
+          response = 'I understand your struggle with doubt, friend. Even Thomas doubted until he saw Jesus (John 20:27). Doubt can actually strengthen faith when we seek God through it. "Lord, I believe; help my unbelief!" (Mark 9:24) is a beautiful prayer for times of uncertainty.';
+        } else if (question.includes('love') || question.includes('relationship')) {
+          response = 'God\'s love for you is beyond measure! 💝 "For God so loved the world that he gave his one and only Son..." (John 3:16). In relationships, remember 1 Corinthians 13:4-7 - love is patient, kind, not envious or boastful. How can you show Christ\'s love today?';
+        } else if (question.includes('help') || question.includes('guidance')) {
+          response = 'Jesus promises to guide us! 🌟 "Trust in the Lord with all your heart and lean not on your own understanding; in all your ways submit to him, and he will make your paths straight" (Proverbs 3:5-6). What specific area do you need guidance in?';
+        } else {
+          response = 'Peace be with you! 👋 I\'m here to help you understand God\'s will through Jesus\'s teachings. Feel free to ask about prayer, scripture, faith questions, or life guidance. "Come to me, all you who are weary and burdened, and I will give you rest" (Matthew 11:28).';
+        }
+        
+        addLocalMessage(response,'assistant','WayMaker AI');
+      }, 1200);
+    };
+
+    // Enter key to send
+    inputEl.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        sendBtn.onclick();
+      }
+    });
+
+    // Initialize with welcome message
+    setTimeout(() => {
+      addLocalMessage('Peace be with you, beloved! 👋 Welcome to WayMaker AI. I\'m here to help you understand God\'s will through Jesus\'s teachings. Feel free to ask about prayer, scripture, faith, or any guidance you need. "For I know the plans I have for you," declares the Lord (Jeremiah 29:11).','assistant','WayMaker AI');
+    }, 500);
+
+    // Add some community members
+    const userList = document.getElementById('user-list');
+    ['Sarah (Mom)', 'David (Teen)', 'Pastor Mike', 'Elder Ruth'].forEach(user => {
+      const li = document.createElement('li');
+      li.className = 'user-item';
+      li.textContent = user;
+      userList.appendChild(li);
+    });
+  </script>
+</body>
+</html>
