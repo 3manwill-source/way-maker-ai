@@ -21,8 +21,9 @@ RUN pip install --no-cache-dir \
 # Copy all application files
 COPY . .
 
-# Create the main application
-RUN echo 'from flask import Flask, jsonify, send_from_directory, render_template_string
+# Create the main application file
+RUN cat > app.py << 'EOF'
+from flask import Flask, jsonify, send_from_directory
 import os
 
 app = Flask(__name__, static_folder=".", static_url_path="")
@@ -33,7 +34,7 @@ def home():
         "message": "WayMaker AI is running!",
         "status": "healthy", 
         "version": "production-v2",
-        "tagline": "Your path to living God'\''s will---step by step",
+        "tagline": "Your path to living God's will---step by step",
         "features": ["Biblical AI", "Age Adaptation", "Crisis Support", "Community Chat"]
     })
 
@@ -63,7 +64,7 @@ def apps():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)
-' > app.py
+EOF
 
 # Environment variables
 ENV FLASK_APP=app.py
