@@ -1,0 +1,9 @@
+version: '3'
+services:
+  nginx:
+    ports:
+      - "8080:80"
+      - "8443:443"
+    environment:
+      - NGINX_PORT=8080
+      - NGINX_SSL_PORT=8443

@@ -3,8 +3,13 @@ const { codeInspectorPlugin } = require('code-inspector-plugin')
 const withMDX = require('@next/mdx')({
   extension: /\.mdx?$/,
   options: {
+    // If you use remark-gfm, you'll need to use next.config.mjs
+    // as the package is ESM only
+    // https://github.com/remarkjs/remark-gfm#install
     remarkPlugins: [],
     rehypePlugins: [],
+    // If you use `MDXProvider`, uncomment the following line.
+    // providerImportSource: "@mdx-js/react",
   },
 })
 
@@ -19,28 +24,13 @@ const nextConfig = {
   basePath,
   assetPrefix,
   webpack: (config, { dev, isServer }) => {
-    // Add the code inspector plugin
     config.plugins.push(codeInspectorPlugin({ bundler: 'webpack' }))
-    
-    // Fix for Windows path handling
-    if (!isServer) {
-      config.resolve = config.resolve || {};
-      config.resolve.fallback = config.resolve.fallback || {};
-      
-      // Normalize path separators for Windows
-      const originalModuleResolver = config.resolve.alias?.['module'] || null;
-      if (originalModuleResolver) {
-        config.resolve.alias['module'] = originalModuleResolver.replace(/\\/g, '/');
-      }
-      
-      // Set publicPath with forward slashes
-      config.output.publicPath = `/_next/`;
-    }
-    
-    return config;
+    return config
   },
-  productionBrowserSourceMaps: false,
+  productionBrowserSourceMaps: false, // enable browser source map generation during the production build
+  // Configure pageExtensions to include md and mdx
   pageExtensions: ['ts', 'tsx', 'js', 'jsx', 'md', 'mdx'],
+  // https://nextjs.org/docs/messages/next-image-unconfigured-host
   images: {
     remotePatterns: remoteImageURLs.map(remoteImageURL => ({
       protocol: remoteImageURL.protocol.replace(':', ''),
@@ -51,13 +41,16 @@ const nextConfig = {
     })),
   },
   experimental: {
-    // Remove any experimental features that might cause issues
   },
+  // fix all before production. Now it slow the develop speed.
   eslint: {
+    // Warning: This allows production builds to successfully complete even if
+    // your project has ESLint errors.
     ignoreDuringBuilds: true,
     dirs: ['app', 'bin', 'config', 'context', 'hooks', 'i18n', 'models', 'service', 'test', 'types', 'utils'],
   },
   typescript: {
+    // https://nextjs.org/docs/api-reference/next.config.js/ignoring-typescript-errors
     ignoreBuildErrors: true,
   },
   reactStrictMode: true,

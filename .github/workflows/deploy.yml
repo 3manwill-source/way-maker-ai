@@ -1,0 +1,39 @@
+name: Deploy to Coolify
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Build and push Docker images
+      run: |
+        echo "Building Docker images for deployment..."
+        # Coolify will handle the actual build and deployment
+        
+    - name: Trigger Coolify Deployment
+      run: |
+        echo "Triggering Coolify deployment..."
+        echo "Coolify webhook URL: ${{ secrets.COOLIFY_WEBHOOK_URL }}"
+        if [ -n "${{ secrets.COOLIFY_WEBHOOK_URL }}" ]; then
+          curl -X POST "${{ secrets.COOLIFY_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
+        else
+          echo "Coolify webhook URL not configured. Skipping automatic deployment."
+        fi
+        
+    - name: Deployment notification
+      run: |
+        echo "Deployment triggered for commit: ${{ github.sha }}"
+        echo "Branch: ${{ github.ref_name }}"
+        echo "Check Coolify dashboard: http://157.180.120.3:8000"
